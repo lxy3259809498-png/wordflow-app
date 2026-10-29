@@ -1,0 +1,67 @@
+{
+  "meta": {
+    "name": "WordFlow 示例词表（原创，CC BY 4.0）",
+    "description": "演示 JSON 导入格式。audioUS/audioUK 留空表示没有录音，应用会使用系统语音或内置合成。",
+    "license": "CC BY 4.0",
+    "version": "2026.10"
+  },
+  "words": [
+    {
+      "term": "abandon",
+      "phoneticUS": "/əˈbændən/",
+      "phoneticUK": "/əˈbændən/",
+      "partOfSpeech": "v.",
+      "definitions": ["放弃，抛弃", "离弃"],
+      "translations": ["abandon a plan 放弃计划"],
+      "examples": [
+        {
+          "en": "They had to abandon the plan because of the storm.",
+          "zh": "因为暴风雨，他们不得不放弃这个计划。"
+        }
+      ],
+      "audioUS": null,
+      "audioUK": null,
+      "tags": ["高频", "动词"],
+      "source": "WordFlow demo",
+      "licenseNote": "CC BY 4.0"
+    },
+    {
+      "term": "algorithm",
+      "phoneticUS": "/ˈælɡərɪðəm/",
+      "phoneticUK": "/ˈælɡərɪðəm/",
+      "partOfSpeech": "n.",
+      "definitions": ["算法"],
+      "translations": ["recommendation algorithm 推荐算法"],
+      "examples": [
+        {
+          "en": "The feed is ranked by a recommendation algorithm.",
+          "zh": "信息流由推荐算法排序。"
+        }
+      ],
+      "audioUS": null,
+      "audioUK": null,
+      "tags": ["科技", "AI"],
+      "source": "WordFlow demo",
+      "licenseNote": "CC BY 4.0"
+    },
+    {
+      "term": "resilient",
+      "phoneticUS": "/rɪˈzɪliənt/",
+      "phoneticUK": "/rɪˈzɪliənt/",
+      "partOfSpeech": "adj.",
+      "definitions": ["有韧性的", "能迅速恢复的"],
+      "translations": [],
+      "examples": [
+        {
+          "en": "Children are often remarkably resilient.",
+          "zh": "孩子往往非常有韧性。"
+        }
+      ],
+      "audioUS": null,
+      "audioUK": null,
+      "tags": ["进阶"],
+      "source": "WordFlow demo",
+      "licenseNote": "CC BY 4.0"
+    }
+  ]
+}

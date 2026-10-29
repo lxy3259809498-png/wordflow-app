@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/wordflow-app/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#6d5efc" />
+    <meta
+      name="description"
+      content="WordFlow — 以主动回忆、间隔复习和错词巩固为核心的本地优先英语背单词应用。"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="WordFlow" />
+    <link rel="apple-touch-icon" href="/wordflow-app/icons/apple-touch-icon.png" />
+    <title>WordFlow · 让单词流动起来</title>
+    <script>
+      // Apply theme before paint to avoid a flash of the wrong palette.
+      try {
+        var stored = JSON.parse(localStorage.getItem('wordflow.theme') || 'null');
+        var mode = stored && stored.mode ? stored.mode : 'system';
+        var dark =
+          mode === 'dark' ||
+          (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.classList.add('dark');
+      } catch (e) {}
+    </script>
+    <script type="module" crossorigin src="/wordflow-app/assets/index-756Fb3oR.js"></script>
+    <link rel="stylesheet" crossorigin href="/wordflow-app/assets/index-Wc7-aeHa.css">
+  <link rel="manifest" href="/wordflow-app/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/wordflow-app/registerSW.js"></script></head>
+  <body class="h-full">
+    <div id="root" class="min-h-full"></div>
+  </body>
+</html>
