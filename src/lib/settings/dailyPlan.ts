@@ -3,10 +3,14 @@ import type { AppSettings } from '@/lib/types';
 /**
  * Daily workload presets.
  *
- * The app has five separate numbers (new words, reviews, session budget, daily
- * word goal, daily minute goal). Editing them one by one is confusing and easy
- * to leave inconsistent, so this module derives a coherent plan from a single
- * choice: "how much time per day" + "how many new words per day".
+ * Design note: there is exactly **one** user-facing knob — how many words per
+ * day. Time is an *estimate* derived from it, never something the learner has to
+ * configure. Two independent knobs (words AND minutes) contradicted each other
+ * and made the learner guess which one actually decided the session size.
+ *
+ * `timeBudgetMinutes` still exists in settings because the session planner uses
+ * it as a hard cap (so a huge review backlog cannot produce a 400-card session).
+ * It is now derived from the word counts instead of being set by hand.
  */
 
 export type DailyPresetId = 'light' | 'steady' | 'serious' | 'intense';
@@ -14,58 +18,48 @@ export type DailyPresetId = 'light' | 'steady' | 'serious' | 'intense';
 export interface DailyPreset {
   id: DailyPresetId;
   label: string;
-  /** One-line description of the commitment. */
+  /** One-line description of the commitment, expressed in words. */
   hint: string;
-  dailyGoalMinutes: number;
   dailyNewLimit: number;
   dailyReviewLimit: number;
   dailyGoalCount: number;
-  timeBudgetMinutes: number;
 }
 
-/** Average seconds a learner spends per card (measured against the planner). */
+/** Average seconds a learner spends per card (matches the session planner). */
 export const SECONDS_PER_CARD = 20;
 
 export const DAILY_PRESETS: DailyPreset[] = [
   {
     id: 'light',
     label: '轻松',
-    hint: '每天 10 分钟，适合刚起步或时间零碎',
-    dailyGoalMinutes: 10,
+    hint: '每天 8 个新词，约 10 分钟',
     dailyNewLimit: 8,
     dailyReviewLimit: 60,
     dailyGoalCount: 15,
-    timeBudgetMinutes: 10,
   },
   {
     id: 'steady',
     label: '标准',
-    hint: '每天 15 分钟，多数人可持续的节奏',
-    dailyGoalMinutes: 15,
+    hint: '每天 12 个新词，约 15 分钟',
     dailyNewLimit: 12,
     dailyReviewLimit: 80,
     dailyGoalCount: 20,
-    timeBudgetMinutes: 15,
   },
   {
     id: 'serious',
     label: '认真',
-    hint: '每天 30 分钟，备考期推荐',
-    dailyGoalMinutes: 30,
+    hint: '每天 25 个新词，约 30 分钟',
     dailyNewLimit: 25,
     dailyReviewLimit: 160,
     dailyGoalCount: 40,
-    timeBudgetMinutes: 30,
   },
   {
     id: 'intense',
     label: '冲刺',
-    hint: '每天 60 分钟，短期突击，注意复习压力',
-    dailyGoalMinutes: 60,
+    hint: '每天 50 个新词，约 60 分钟',
     dailyNewLimit: 50,
     dailyReviewLimit: 300,
     dailyGoalCount: 80,
-    timeBudgetMinutes: 60,
   },
 ];
 
@@ -76,7 +70,6 @@ export const presetById = (id: DailyPresetId): DailyPreset =>
 export function matchPreset(settings: AppSettings): DailyPresetId | null {
   const found = DAILY_PRESETS.find(
     (preset) =>
-      preset.dailyGoalMinutes === settings.dailyGoalMinutes &&
       preset.dailyNewLimit === settings.dailyNewLimit &&
       preset.dailyReviewLimit === settings.dailyReviewLimit &&
       preset.dailyGoalCount === settings.dailyGoalCount,
@@ -84,21 +77,7 @@ export function matchPreset(settings: AppSettings): DailyPresetId | null {
   return found?.id ?? null;
 }
 
-/** Applies a preset (pure, for optimistic updates). */
-export function applyPreset(preset: DailyPreset): Partial<AppSettings> {
-  return {
-    dailyGoalMinutes: preset.dailyGoalMinutes,
-    dailyNewLimit: preset.dailyNewLimit,
-    dailyReviewLimit: preset.dailyReviewLimit,
-    dailyGoalCount: preset.dailyGoalCount,
-    timeBudgetMinutes: preset.timeBudgetMinutes,
-  };
-}
-
-/**
- * How many cards fit in a time budget. Used to show "this budget allows N cards"
- * so the learner can see the consequence of moving the slider.
- */
+/** How many cards fit in a time budget. */
 export function cardsForMinutes(minutes: number): number {
   if (!Number.isFinite(minutes) || minutes <= 0) return 0;
   return Math.floor((minutes * 60) / SECONDS_PER_CARD);
@@ -111,26 +90,48 @@ export function minutesForCards(cards: number): number {
 }
 
 /**
- * Keeps the derived numbers consistent when the learner drags one slider:
- * - a longer daily goal allows more new words,
- * - the review cap scales with the same time budget.
- *
- * Deliberately conservative: new words are capped at what the time budget can
- * actually absorb, because new words cost more attention than reviews.
+ * Estimated cards studied per day for a new-word count.
+ * Reviews accumulate at roughly 2.5 per new word once a deck is established.
  */
-export function deriveFromMinutes(minutes: number, newPerDay?: number): Partial<AppSettings> {
-  const clamped = Math.min(240, Math.max(5, Math.round(minutes)));
-  const capacity = cardsForMinutes(clamped);
-  // Reserve ~60% of the session for reviews, the rest for new cards.
-  const newCapacity = Math.max(1, Math.floor(capacity * 0.4));
-  const reviewCapacity = Math.max(10, Math.ceil(capacity * 0.7));
+export function expectedCards(dailyNewLimit: number, dailyReviewLimit: number): number {
+  const reviews = Math.min(dailyReviewLimit, Math.round(dailyNewLimit * 2.5));
+  return dailyNewLimit + reviews;
+}
+
+/**
+ * Derives every dependent number from the single choice "new words per day".
+ *
+ * - `dailyReviewLimit` scales with the new-word load (never below 20),
+ * - `dailyGoalCount` is what the learner will actually touch in a day,
+ * - `timeBudgetMinutes` becomes the planner's safety cap, with headroom so the
+ *   plan is not cut short mid-session,
+ * - `dailyGoalMinutes` is stored purely for display/legacy, equal to the estimate.
+ */
+export function deriveFromWords(newPerDay: number): Partial<AppSettings> {
+  const newLimit = Math.min(100, Math.max(0, Math.round(newPerDay)));
+  const reviewLimit = Math.max(20, Math.min(500, Math.round(newLimit * 5)));
+  const goalCount = Math.max(5, Math.round(newLimit * 2));
+  const expected = expectedCards(newLimit, reviewLimit);
+  // 1.5× headroom: the cap must not truncate the plan the learner asked for.
+  const budget = Math.max(5, Math.ceil(minutesForCards(expected) * 1.5));
+
   return {
-    dailyGoalMinutes: clamped,
-    timeBudgetMinutes: clamped,
-    dailyNewLimit: newPerDay === undefined ? newCapacity : Math.min(newPerDay, newCapacity),
-    dailyReviewLimit: reviewCapacity,
-    // The word-count goal counts reviews + new cards actually studied.
-    dailyGoalCount: Math.max(5, Math.round(capacity * 0.8)),
+    dailyNewLimit: newLimit,
+    dailyReviewLimit: reviewLimit,
+    dailyGoalCount: goalCount,
+    timeBudgetMinutes: budget,
+    dailyGoalMinutes: Math.max(5, minutesForCards(expected)),
+  };
+}
+
+/** Applies a preset, deriving the dependent numbers from its word count. */
+export function applyPreset(preset: DailyPreset): Partial<AppSettings> {
+  return {
+    dailyNewLimit: preset.dailyNewLimit,
+    dailyReviewLimit: preset.dailyReviewLimit,
+    dailyGoalCount: preset.dailyGoalCount,
+    timeBudgetMinutes: Math.max(5, Math.ceil(minutesForCards(expectedCards(preset.dailyNewLimit, preset.dailyReviewLimit)) * 1.5)),
+    dailyGoalMinutes: Math.max(5, minutesForCards(expectedCards(preset.dailyNewLimit, preset.dailyReviewLimit))),
   };
 }
 
@@ -141,7 +142,6 @@ export function estimateWorkload(settings: AppSettings): {
   reviewShare: number;
 } {
   const newWords = settings.dailyNewLimit;
-  // Roughly 2.5 reviews per new word once the deck is established.
   const reviews = Math.min(settings.dailyReviewLimit, Math.round(newWords * 2.5));
   const wordsPerDay = newWords + reviews;
   return {
@@ -149,4 +149,11 @@ export function estimateWorkload(settings: AppSettings): {
     minutes: minutesForCards(wordsPerDay),
     reviewShare: wordsPerDay === 0 ? 0 : reviews / wordsPerDay,
   };
+}
+
+/** Days needed to finish the remaining vocabulary at the chosen pace. */
+export function daysToFinish(remainingWords: number, newPerDay: number): number | null {
+  if (newPerDay <= 0) return null;
+  if (remainingWords <= 0) return 0;
+  return Math.ceil(remainingWords / newPerDay);
 }

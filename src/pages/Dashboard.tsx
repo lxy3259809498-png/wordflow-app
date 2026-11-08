@@ -125,7 +125,7 @@ export default function Dashboard() {
         actions={
           <Link to="/settings" className="chip hover:text-ink">
             <Target className="h-3.5 w-3.5" aria-hidden />
-            每日目标 {settings.dailyGoalCount} 词 / {settings.dailyGoalMinutes} 分钟
+            每日目标 {settings.dailyGoalCount} 词 · 新词 {settings.dailyNewLimit}
           </Link>
         }
       />
@@ -193,7 +193,7 @@ export default function Dashboard() {
             </div>
             <span className="chip-brand">
               <Timer className="h-3.5 w-3.5" aria-hidden />
-              {settings.timeBudgetMinutes} 分钟预算
+              每天 {settings.dailyNewLimit} 新词
             </span>
           </div>
 
@@ -201,9 +201,9 @@ export default function Dashboard() {
               require leaving the page the learner starts from. */}
           <details className="rounded-xl border border-line bg-surface/60">
             <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
-              调整每天学多少 / 学多久
+              调整每天学多少词
               <span className="ml-2 text-xs font-normal text-muted">
-                当前 {settings.dailyNewLimit} 新词 · {settings.dailyGoalMinutes} 分钟
+                当前 {settings.dailyNewLimit} 新词 · 约 {settings.dailyGoalMinutes} 分钟
               </span>
             </summary>
             <div className="border-t border-line p-3">
@@ -240,7 +240,7 @@ export default function Dashboard() {
                 title="学习时长"
                 count={Math.round((todayStats?.durationSeconds ?? 0) / 60)}
                 unit="分钟"
-                description={`目标 ${settings.dailyGoalMinutes} 分钟`}
+                description={`今日已累计`}
                 tone="muted"
               />
             </div>

@@ -69,7 +69,6 @@ export default function Study() {
   const startFresh = async (options?: {
     mode: StartMode;
     reviewMode: ReviewMode;
-    timeBudgetMinutes: number;
     deckIds: string[];
     wordOrder: WordOrder;
   }) => {
@@ -78,10 +77,9 @@ export default function Study() {
       const result = await startSession({
         mode: options?.mode ?? 'mixed',
         deckIds: options?.deckIds ?? settings.selectedDeckIds,
-        settings: options ? { ...settings, timeBudgetMinutes: options.timeBudgetMinutes } : settings,
+        settings,
         now: Date.now(),
         reviewMode: options?.reviewMode ?? settings.reviewMode,
-        timeBudgetMinutes: options?.timeBudgetMinutes ?? settings.timeBudgetMinutes,
         wordOrder: options?.wordOrder ?? settings.wordOrder,
       });
       if (!result.session) {

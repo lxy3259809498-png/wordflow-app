@@ -194,15 +194,6 @@ export default function SettingsPage() {
                 onChange={(value) => updateSettings({ dailyReviewLimit: value })}
               />
               <NumberField
-                id="timeBudgetMinutes"
-                label="单次时间预算（分钟）"
-                value={settings.timeBudgetMinutes}
-                min={1}
-                max={240}
-                hint="按每卡约 20 秒估算"
-                onChange={(value) => updateSettings({ timeBudgetMinutes: value })}
-              />
-              <NumberField
                 id="dailyGoalCount"
                 label="每日词数目标"
                 value={settings.dailyGoalCount}
@@ -211,15 +202,10 @@ export default function SettingsPage() {
                 hint="用于首页进度与打卡判定"
                 onChange={(value) => updateSettings({ dailyGoalCount: value })}
               />
-              <NumberField
-                id="dailyGoalMinutes"
-                label="每日时长目标（分钟）"
-                value={settings.dailyGoalMinutes}
-                min={0}
-                max={240}
-                onChange={(value) => updateSettings({ dailyGoalMinutes: value })}
-              />
             </div>
+            <p className="mt-2 text-[11px] text-muted">
+              时间不用单独设置：预计用时由词数自动推算，见上方「每天学多少」。
+            </p>
           </details>
 
           <div className="card card-pad space-y-3">

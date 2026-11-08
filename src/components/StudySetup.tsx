@@ -43,13 +43,10 @@ const CONTENT_MODES: { value: StartMode; title: string; hint: string }[] = [
   { value: 'new', title: '只学新词', hint: '只推进新词，不安排复习' },
 ];
 
-const BUDGETS = [5, 10, 15, 30];
-
 export interface StudySetupProps {
   onStart: (options: {
     mode: StartMode;
     reviewMode: ReviewMode;
-    timeBudgetMinutes: number;
     deckIds: string[];
     wordOrder: WordOrder;
   }) => Promise<void>;
@@ -70,7 +67,6 @@ export function StudySetup({ onStart, starting }: StudySetupProps) {
 
   const [reviewMode, setReviewMode] = useState<ReviewMode>(settings.reviewMode);
   const [contentMode, setContentMode] = useState<StartMode>('mixed');
-  const [budget, setBudget] = useState<number>(settings.timeBudgetMinutes);
   const [wordOrder, setWordOrder] = useState<WordOrder>(settings.wordOrder);
   const [deckIds, setDeckIds] = useState<string[]>(settings.selectedDeckIds);
   const [deckQuery, setDeckQuery] = useState('');
@@ -120,9 +116,8 @@ export function StudySetup({ onStart, starting }: StudySetupProps) {
       void previewStudyPlan({
         mode: contentMode,
         deckIds,
-        settings: { ...settings, timeBudgetMinutes: budget },
+        settings,
         now: Date.now(),
-        timeBudgetMinutes: budget,
         wordOrder,
       })
         .then((result) => {
@@ -136,7 +131,7 @@ export function StudySetup({ onStart, starting }: StudySetupProps) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [budget, contentMode, deckIds, settings, wordOrder]);
+  }, [contentMode, deckIds, settings, wordOrder]);
 
   const toggleDeck = (id: string) => {
     setDeckIds((current) => {
@@ -152,14 +147,12 @@ export function StudySetup({ onStart, starting }: StudySetupProps) {
     const selected = deckIds.filter((id) => id !== NO_DECK_SENTINEL);
     updateSettings({
       reviewMode,
-      timeBudgetMinutes: budget,
       selectedDeckIds: selected,
       wordOrder,
     });
     void onStart({
       mode: contentMode,
       reviewMode,
-      timeBudgetMinutes: budget,
       deckIds: selected,
       wordOrder,
     });
@@ -283,58 +276,42 @@ export function StudySetup({ onStart, starting }: StudySetupProps) {
         <section className="card card-pad space-y-3">
           <h2 className="section-title flex items-center gap-1.5">
             <Timer className="h-4 w-4 text-brand" aria-hidden />
-            时间预算
+            本节计划
           </h2>
-          <div className="flex flex-wrap gap-2">
-            {BUDGETS.map((minutes) => (
-              <button
-                key={minutes}
-                type="button"
-                onClick={() => setBudget(minutes)}
-                aria-pressed={budget === minutes}
-                className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition ${
-                  budget === minutes
-                    ? 'border-brand bg-brand-soft text-brand'
-                    : 'border-line text-muted hover:text-ink'
-                }`}
-              >
-                {minutes} 分钟
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-muted">
-            按每张卡约 20 秒估算。预算用完时只保留复习，不再加新词。
-          </p>
-          <div className="rounded-xl bg-surface p-3">
-            <p className="text-xs text-muted">本节计划</p>
-            {loadingPreview ? (
-              <p className="mt-1 text-sm text-muted">计算中…</p>
-            ) : preview && preview.plannedNew + preview.plannedReview > 0 ? (
-              <>
-                <p className="mt-1 text-lg font-semibold tabular-nums">
-                  {preview.plannedReview} 复习 + {preview.plannedNew} 新词
-                </p>
-                <p className="text-xs text-muted">
-                  约 {preview.estimatedMinutes} 分钟 · 到期 {preview.due} · 待学 {preview.fresh}
-                </p>
-                {preview.pressure ? (
-                  <p className="mt-1 text-[11px] text-warn">
-                    到期复习较多，本节已自动减少新词数量。
-                  </p>
-                ) : null}
-              </>
-            ) : (
-              <p className="mt-1 text-sm text-muted">
-                {preview?.reason === 'no-words'
-                  ? '当前词书没有单词。'
-                  : contentMode === 'review'
-                    ? '现在没有到期复习。'
-                    : contentMode === 'new'
-                      ? '该词书的新词已学完。'
-                      : '暂时没有可学内容。'}
+          {loadingPreview ? (
+            <p className="text-sm text-muted">计算中…</p>
+          ) : preview && preview.plannedNew + preview.plannedReview > 0 ? (
+            <>
+              <p className="text-2xl font-semibold tabular-nums">
+                {preview.plannedReview} 复习 + {preview.plannedNew} 新词
               </p>
-            )}
-          </div>
+              <p className="text-xs text-muted">
+                约 {preview.estimatedMinutes} 分钟 · 到期 {preview.due} · 待学 {preview.fresh}
+              </p>
+              {preview.pressure ? (
+                <p className="text-[11px] text-warn">
+                  到期复习较多，本节已自动减少新词数量。
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-sm text-muted">
+              {preview?.reason === 'no-words'
+                ? '当前词书没有单词。'
+                : contentMode === 'review'
+                  ? '现在没有到期复习。'
+                  : contentMode === 'new'
+                    ? '该词书的新词已学完。'
+                    : '暂时没有可学内容。'}
+            </p>
+          )}
+          <p className="text-xs text-muted">
+            时长由「每天学多少新词」自动推算（按每张卡约 20 秒），不用单独设置。
+            预算用完时只保留复习，不再加新词。
+          </p>
+          <Link to="/settings" className="text-xs text-brand hover:underline">
+            调整每天学多少 →
+          </Link>
         </section>
       </div>
 
@@ -524,7 +501,7 @@ export function StudySetup({ onStart, starting }: StudySetupProps) {
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted">
-          练习方式与时间预算会记住，下次打开默认沿用。
+          练习方式、词书与顺序会记住，下次打开默认沿用。
         </p>
         <button type="button" className="btn-primary sm:min-w-44" onClick={handleStart} disabled={!canStart}>
           <Play className="h-4 w-4" aria-hidden />

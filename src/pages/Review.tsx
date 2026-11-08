@@ -216,7 +216,8 @@ export default function Review() {
       )}
 
       <InfoBanner tone="info">
-        复习上限 {settings.dailyReviewLimit} 词/天、时间预算 {settings.timeBudgetMinutes} 分钟；在首页开始学习时会自动只安排能完成的数量。
+        复习上限 {settings.dailyReviewLimit} 词/天；在首页开始学习时会先清到期复习，
+        再按每天 {settings.dailyNewLimit} 个新词的节奏补新词。
       </InfoBanner>
     </div>
   );

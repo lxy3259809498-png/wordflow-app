@@ -4,7 +4,8 @@ import {
   SECONDS_PER_CARD,
   applyPreset,
   cardsForMinutes,
-  deriveFromMinutes,
+  daysToFinish,
+  deriveFromWords,
   estimateWorkload,
   matchPreset,
   minutesForCards,
@@ -40,23 +41,24 @@ describe('cardsForMinutes / minutesForCards', () => {
 describe('presets', () => {
   it('every preset is internally consistent', () => {
     for (const preset of DAILY_PRESETS) {
-      expect(preset.dailyGoalMinutes).toBeGreaterThan(0);
       expect(preset.dailyNewLimit).toBeGreaterThan(0);
       expect(preset.dailyReviewLimit).toBeGreaterThanOrEqual(preset.dailyNewLimit);
-      expect(preset.timeBudgetMinutes).toBe(preset.dailyGoalMinutes);
+      expect(preset.dailyGoalCount).toBeGreaterThan(0);
     }
   });
 
-  it('presets are ordered from lighter to heavier', () => {
-    const minutes = DAILY_PRESETS.map((preset) => preset.dailyGoalMinutes);
-    expect([...minutes].sort((a, b) => a - b)).toEqual(minutes);
+  it('presets are ordered from lighter to heavier word load', () => {
+    const newLimits = DAILY_PRESETS.map((preset) => preset.dailyNewLimit);
+    expect([...newLimits].sort((a, b) => a - b)).toEqual(newLimits);
   });
 
-  it('applies a preset to settings', () => {
+  it('applies a preset and derives a workable time budget', () => {
     const patch = applyPreset(presetById('serious'));
-    expect(patch.dailyGoalMinutes).toBe(30);
     expect(patch.dailyNewLimit).toBe(25);
-    expect(patch.timeBudgetMinutes).toBe(30);
+    expect(patch.dailyReviewLimit).toBe(160);
+    // The derived cap must be large enough not to truncate the requested plan.
+    const expectedCards = 25 + Math.min(160, Math.round(25 * 2.5));
+    expect(patch.timeBudgetMinutes!).toBeGreaterThanOrEqual(minutesForCards(expectedCards));
   });
 
   it('detects the active preset', () => {
@@ -75,37 +77,43 @@ describe('presets', () => {
   });
 });
 
-describe('deriveFromMinutes', () => {
-  it('caps new words by what the time budget can absorb', () => {
-    // 5 minutes = 15 cards; new words must not exceed the session capacity.
-    const patch = deriveFromMinutes(5);
-    expect(patch.timeBudgetMinutes).toBe(5);
-    expect(patch.dailyNewLimit!).toBeLessThanOrEqual(cardsForMinutes(5));
+describe('deriveFromWords — the single knob', () => {
+  it('scales reviews and goal with the new-word count', () => {
+    const low = deriveFromWords(5);
+    const high = deriveFromWords(40);
+    expect(high.dailyReviewLimit!).toBeGreaterThan(low.dailyReviewLimit!);
+    expect(high.dailyGoalCount!).toBeGreaterThan(low.dailyGoalCount!);
+    expect(high.timeBudgetMinutes!).toBeGreaterThan(low.timeBudgetMinutes!);
   });
 
-  it('scales the plan with the requested minutes', () => {
-    const short = deriveFromMinutes(10);
-    const long = deriveFromMinutes(60);
-    expect(long.dailyNewLimit!).toBeGreaterThan(short.dailyNewLimit!);
-    expect(long.dailyReviewLimit!).toBeGreaterThan(short.dailyReviewLimit!);
-    expect(long.dailyGoalCount!).toBeGreaterThan(short.dailyGoalCount!);
+  it('keeps the time cap generous enough for the requested load', () => {
+    for (const words of [0, 5, 12, 25, 50, 100]) {
+      const patch = deriveFromWords(words);
+      const expected = words + Math.min(patch.dailyReviewLimit!, Math.round(words * 2.5));
+      expect(patch.timeBudgetMinutes!).toBeGreaterThanOrEqual(minutesForCards(expected));
+    }
   });
 
-  it('never lowers an explicit new-word choice below its own value', () => {
-    const patch = deriveFromMinutes(30, 10);
-    expect(patch.dailyNewLimit).toBe(10);
+  it('clamps out-of-range input', () => {
+    expect(deriveFromWords(-10).dailyNewLimit).toBe(0);
+    expect(deriveFromWords(9999).dailyNewLimit).toBe(100);
   });
 
-  it('clamps out-of-range minutes', () => {
-    expect(deriveFromMinutes(1).dailyGoalMinutes).toBe(5);
-    expect(deriveFromMinutes(9999).dailyGoalMinutes).toBe(240);
+  it('handles a review-only plan without dividing by zero', () => {
+    const patch = deriveFromWords(0);
+    expect(patch.dailyNewLimit).toBe(0);
+    expect(patch.dailyGoalCount).toBeGreaterThan(0);
+    expect(Number.isFinite(patch.timeBudgetMinutes)).toBe(true);
+  });
+
+  it('always produces an estimate label', () => {
+    expect(deriveFromWords(20).dailyGoalMinutes).toBeGreaterThan(0);
   });
 });
 
 describe('estimateWorkload', () => {
   it('counts new words plus reviews', () => {
     const workload = estimateWorkload({ ...base, dailyNewLimit: 10, dailyReviewLimit: 100 });
-    // 10 new + min(100, 25) reviews
     expect(workload.wordsPerDay).toBe(35);
     expect(workload.reviewShare).toBeGreaterThan(0);
     expect(workload.minutes).toBe(minutesForCards(35));
@@ -121,5 +129,20 @@ describe('estimateWorkload', () => {
   it('respects a low review cap', () => {
     const workload = estimateWorkload({ ...base, dailyNewLimit: 20, dailyReviewLimit: 5 });
     expect(workload.wordsPerDay).toBe(25);
+  });
+});
+
+describe('daysToFinish', () => {
+  it('divides remaining words by the daily pace', () => {
+    expect(daysToFinish(100, 10)).toBe(10);
+    expect(daysToFinish(101, 10)).toBe(11);
+  });
+
+  it('returns null when the pace is zero, so callers show ∞', () => {
+    expect(daysToFinish(100, 0)).toBeNull();
+  });
+
+  it('returns 0 when nothing is left', () => {
+    expect(daysToFinish(0, 25)).toBe(0);
   });
 });

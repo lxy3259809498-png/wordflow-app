@@ -394,27 +394,25 @@ test.describe('WordFlow core loop', () => {
     await expect(page.getByRole('button', { name: '开始学习', exact: true })).toBeDisabled();
   });
 
-  test('daily plan sliders change how much is scheduled per day', async ({ page }) => {
+  test('daily plan has one knob: new words per day', async ({ page }) => {
     await page.goto('/settings');
     await page.getByRole('tab', { name: '学习' }).click();
 
-    await expect(page.getByRole('heading', { name: '每日学习量' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '每天学多少' })).toBeVisible();
 
     // Presets are real, selectable controls with visible consequences.
     await expect(page.getByRole('button', { name: /轻松/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /冲刺/ })).toBeVisible();
 
     await page.getByRole('button', { name: /认真/ }).click();
-    await expect(page.getByTestId('daily-minutes-value')).toHaveText('30 分钟');
     await expect(page.getByTestId('daily-new-value')).toHaveText('25 词');
     await expect(page.getByRole('button', { name: /认真/ })).toHaveAttribute('aria-pressed', 'true');
 
-    // The minutes slider really moves the derived plan.
-    const minutesSlider = page.getByLabel('每天学习多久');
-    await minutesSlider.fill('60');
-    await expect(page.getByTestId('daily-minutes-value')).toHaveText('60 分钟');
+    // Time is a derived estimate now — there must be no minutes slider at all.
+    await expect(page.getByLabel('每天学习多久')).toHaveCount(0);
+    await expect(page.getByTestId('daily-estimated-minutes')).toBeVisible();
 
-    // The new-word slider is independent and also persisted.
+    // The new-word slider drives everything, and is persisted.
     const wordsSlider = page.getByLabel('每天学多少新词');
     await wordsSlider.fill('5');
     await expect(page.getByTestId('daily-new-value')).toHaveText('5 词');
@@ -425,7 +423,11 @@ test.describe('WordFlow core loop', () => {
     await page.reload();
     await page.getByRole('tab', { name: '学习' }).click();
     await expect(page.getByTestId('daily-new-value')).toHaveText('5 词');
-    await expect(page.getByTestId('daily-minutes-value')).toHaveText('60 分钟');
+
+    // Advanced area no longer exposes a time budget either.
+    await page.getByText('高级：单独调整每个上限').click();
+    await expect(page.getByLabel('单次时间预算（分钟）')).toHaveCount(0);
+    await expect(page.getByLabel('每日时长目标（分钟）')).toHaveCount(0);
   });
 
   test('daily plan shown on the dashboard affects the scheduled new words', async ({ page }) => {
@@ -435,8 +437,8 @@ test.describe('WordFlow core loop', () => {
     await expect(page.getByTestId('daily-new-value')).toHaveText('8 词');
 
     await page.goto('/');
-    // The dashboard reflects the same numbers the learner just chose.
-    await expect(page.getByRole('link', { name: /每日目标 15 词 \/ 10 分钟/ })).toBeVisible();
+    // The dashboard reflects the same word counts the learner just chose.
+    await expect(page.getByRole('link', { name: /每日目标 15 词 · 新词 8/ })).toBeVisible();
     await expect(page.getByText('每日上限 8', { exact: false }).first()).toBeVisible();
   });
 
