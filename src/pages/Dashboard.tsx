@@ -368,7 +368,7 @@ export default function Dashboard() {
             <EmptyState
               icon={<BookOpen className="h-5 w-5" />}
               title="还没有词书"
-              description="导入你自己的 CET-4 / CET-6 词表，或使用内置演示词书。"
+              description="导入你自己的 CET-4 / CET-6 词表，或直接使用内置的 8 本考试词书。"
               action={
                 <Link to="/decks" className="btn-primary">
                   去词书页

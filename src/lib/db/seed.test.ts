@@ -1,80 +1,75 @@
 import { describe, expect, it } from 'vitest';
-import { DEMO_DECKS, DEMO_WORD_COUNT, getDemoWords } from '@/lib/db/seed';
-import { EXTRA_DECK_SEEDS } from '@/lib/db/seedExtra';
+import { GENERATED_DECK_INDEX, loadGeneratedDecks } from '@/lib/db/seed';
 
 /**
- * Guards against the two ways a hand-written seed file breaks a database:
- * duplicate word ids, and duplicate normalized terms (which would violate the
- * unique index on `words.normalizedTerm`).
+ * Guards the built-in vocabulary. The app ships only ECDICT decks, so the risks
+ * worth testing are: a deck whose word count drifts from its index entry, a
+ * duplicate normalized term in the shared pool (which would violate the unique
+ * index on `words.normalizedTerm`), and a deck wrongly flagged as demo data.
  */
-describe('demo seed integrity', () => {
-  const demo = getDemoWords();
-  const allWords = demo.flatMap((entry) => entry.words);
-
-  it('ships several decks, not just two', () => {
-    expect(demo.length).toBeGreaterThanOrEqual(8);
-    expect(demo.length).toBe(EXTRA_DECK_SEEDS.length + DEMO_DECKS.length);
+describe('built-in ECDICT decks', () => {
+  it('ships the eight real exam decks', () => {
+    const ids = GENERATED_DECK_INDEX.map((entry) => entry.id);
+    expect(ids.sort()).toEqual(
+      ['cet4-full', 'cet6-full', 'gk-core', 'gre-full', 'ielts-full', 'kaoyan-full', 'toefl-full', 'zk-core'].sort(),
+    );
   });
 
-  it('has a meaningful amount of vocabulary', () => {
-    expect(DEMO_WORD_COUNT).toBe(allWords.length);
-    expect(DEMO_WORD_COUNT).toBeGreaterThanOrEqual(190);
-  });
-
-  it('uses unique word ids', () => {
-    const ids = allWords.map((word) => word.id);
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-
-  it('never duplicates a normalized term across decks', () => {
-    const seen = new Map<string, string>();
-    for (const entry of demo) {
-      for (const word of entry.words) {
-        const previous = seen.get(word.normalizedTerm);
-        expect(previous, `"${word.term}" 同时出现在 ${previous} 和 ${entry.deck.name}`).toBeUndefined();
-        seen.set(word.normalizedTerm, entry.deck.name);
-      }
+  it('reports the real vocabulary size of each deck', () => {
+    const expected: Record<string, number> = {
+      'zk-core': 1598,
+      'gk-core': 3666,
+      'cet4-full': 3844,
+      'cet6-full': 5401,
+      'kaoyan-full': 4796,
+      'ielts-full': 5020,
+      'toefl-full': 6936,
+      'gre-full': 7484,
+    };
+    for (const entry of GENERATED_DECK_INDEX) {
+      expect(entry.count, `${entry.id} 的词数`).toBe(expected[entry.id]);
     }
   });
 
-  it('gives every word the fields the UI needs', () => {
-    for (const word of allWords) {
+  it('builds deck rows that carry their source and licence', async () => {
+    const { decks } = await loadGeneratedDecks();
+    expect(decks).toHaveLength(GENERATED_DECK_INDEX.length);
+    for (const deck of decks) {
+      expect(deck.id.startsWith('deck-')).toBe(true);
+      expect(deck.isDemo).toBe(false);
+      expect(deck.source).toContain('ECDICT');
+      expect(deck.licenseNote).toContain('MIT');
+      expect(deck.name.trim().length).toBeGreaterThan(0);
+      expect(deck.description).toContain('不是官方考纲全集');
+    }
+  });
+
+  it('keeps the shared word pool deduplicated across decks', async () => {
+    const { words, links } = await loadGeneratedDecks();
+    const terms = words.map((word) => word.normalizedTerm);
+    expect(new Set(terms).size).toBe(terms.length);
+    // 8,000+ terms appear in more than one exam list, so links far outnumber words.
+    expect(links.length).toBeGreaterThan(words.length);
+    const linkIds = links.map((link) => link.id);
+    expect(new Set(linkIds).size).toBe(linkIds.length);
+  });
+
+  it('gives every word the fields the UI needs', async () => {
+    const { words } = await loadGeneratedDecks();
+    for (const word of words.slice(0, 500)) {
       expect(word.term.trim().length).toBeGreaterThan(0);
       expect(word.normalizedTerm).toBe(word.term.trim().toLowerCase());
       expect(word.definitions.length).toBeGreaterThan(0);
       expect(word.definitions[0].trim().length).toBeGreaterThan(0);
-      expect(word.partOfSpeech.trim().length).toBeGreaterThan(0);
-      expect(word.licenseNote.length).toBeGreaterThan(0);
-      expect(word.source.length).toBeGreaterThan(0);
+      expect(word.source).toBe('ECDICT');
+      expect(word.licenseNote).toContain('MIT');
     }
   });
 
-  it('ships example sentences with translations for every word', () => {
-    for (const word of allWords) {
-      expect(word.examples.length).toBeGreaterThan(0);
-      expect(word.examples[0].en.trim().length).toBeGreaterThan(8);
-      expect(word.examples[0].zh.trim().length).toBeGreaterThan(1);
-    }
-  });
-
-  it('marks every demo deck as demo content with a licence note', () => {
-    for (const entry of demo) {
-      expect(entry.deck.isDemo).toBe(true);
-      expect(entry.deck.licenseNote.length).toBeGreaterThan(0);
-      expect(entry.deck.name).toContain('演示');
-      expect(entry.words.length).toBeGreaterThanOrEqual(20);
-    }
-  });
-
-  it('covers the promised deck categories', () => {
-    const types = demo.map((entry) => entry.deck.examType);
-    for (const expected of ['CET4', 'CET6', 'GAOKAO', 'KAOYAN', 'IELTS', 'TOEFL', 'BUSINESS', 'DAILY', 'TECH']) {
-      expect(types).toContain(expected);
-    }
-  });
-
-  it('keeps word ids stable across calls so re-seeding stays idempotent', () => {
-    const again = getDemoWords().flatMap((entry) => entry.words.map((word) => word.id));
-    expect(again).toEqual(allWords.map((word) => word.id));
+  it('keeps word ids stable across calls so re-seeding stays idempotent', async () => {
+    const first = await loadGeneratedDecks();
+    const again = await loadGeneratedDecks();
+    expect(again.words.map((word) => word.id)).toEqual(first.words.map((word) => word.id));
+    expect(again.links.map((link) => link.id)).toEqual(first.links.map((link) => link.id));
   });
 });

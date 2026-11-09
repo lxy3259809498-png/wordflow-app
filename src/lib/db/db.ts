@@ -19,9 +19,10 @@ import type {
  *    need a version bump.
  *  - v2: phonetic/audio fields + source/licence indexes. Existing rows are
  *    back-filled in place via `upgrade` — user states/logs are never touched.
+ *  - v3: repairs the `isDemo` flag that v2 over-applied to the ECDICT decks.
  */
 export const DB_NAME = 'wordflow-db';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export interface MetaRecord {
   key: string;
@@ -92,14 +93,41 @@ export class WordFlowDB extends Dexie {
             if (!Array.isArray(word.examples)) word.examples = [];
             if (!Array.isArray(word.tags)) word.tags = [];
           });
-        // Decks get an explicit demo flag so the catalogue can tell them apart.
+        // Decks get an explicit demo flag. Only the hand-written sample decks
+        // that shipped before v4 used the `-demo` suffix; the ECDICT decks are
+        // `deck-cet4-full` etc. and must never be flagged as demo.
         await tx
           .table<Deck>('decks')
           .toCollection()
           .modify((deck) => {
             if (deck.isDemo === undefined) {
-              deck.isDemo = typeof deck.id === 'string' && deck.id.startsWith('deck-');
+              deck.isDemo = typeof deck.id === 'string' && deck.id.endsWith('-demo');
             }
+          });
+      });
+    // v3: the v2 upgrade flagged every `deck-*` id as a demo deck, which also
+    // caught the real ECDICT decks. Repair the flag in place; no rows are lost.
+    this.version(3)
+      .stores({
+        words: 'id, &normalizedTerm, term, source, *tags',
+        decks: 'id, examType, name, isDemo',
+        deckWords: 'id, deckId, wordId, &[deckId+wordId]',
+        userWordStates: 'id, &wordId, state, nextReviewAt, isInErrorBook, isStarred, deckId',
+        reviewLogs: 'id, &eventId, wordId, sessionId, reviewedAt, dateKey, rating',
+        sessions: 'id, status, updatedAt',
+        dailyStats: '&dateKey',
+        achievements: 'id, &code',
+        importBatches: 'id, deckId, createdAt',
+        aiExamples: 'wordId',
+        meta: 'key',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table<Deck>('decks')
+          .toCollection()
+          .modify((deck) => {
+            const isDemoId = typeof deck.id === 'string' && deck.id.endsWith('-demo');
+            if (deck.isDemo !== isDemoId) deck.isDemo = isDemoId;
           });
       });
   }

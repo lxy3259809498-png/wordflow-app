@@ -1,5 +1,5 @@
 import { db, type WordFlowDB } from '@/lib/db/db';
-import { getDemoWords } from '@/lib/db/seed';
+import { prepareDb } from '@/lib/db/bootstrap';
 import {
   ALGORITHM_VERSION,
   DEFAULT_ALGORITHM_CONFIG,
@@ -78,29 +78,12 @@ export class LocalDataProvider implements DataProvider {
   constructor(private readonly database: WordFlowDB = db) {}
 
   async initialize(): Promise<void> {
+    // Seeding has exactly one implementation (ECDICT decks + versioned upgrade);
+    // duplicating it here is what previously left this path with only the small
+    // hand-written decks. `prepareDb` is idempotent.
     const meta = await this.database.meta.get('seeded');
     if (meta?.value === true) return;
-    const demo = getDemoWords();
-    await this.database.transaction(
-      'rw',
-      [this.database.decks, this.database.words, this.database.deckWords, this.database.meta],
-      async () => {
-        for (const { deck, words } of demo) {
-          await this.database.decks.put(deck);
-          await this.database.words.bulkPut(words);
-          await this.database.deckWords.bulkPut(
-            words.map((word) => ({
-              id: `${deck.id}:${word.id}`,
-              deckId: deck.id,
-              wordId: word.id,
-              createdAt: deck.createdAt,
-            })),
-          );
-        }
-        await this.database.meta.put({ key: 'seeded', value: true });
-        await this.database.meta.put({ key: 'algorithmVersion', value: ALGORITHM_VERSION });
-      },
-    );
+    await prepareDb(this.database);
   }
 
   async listDecks(): Promise<Deck[]> {
@@ -662,7 +645,7 @@ export async function listImportBatches(database: WordFlowDB = db): Promise<Impo
 /**
  * Deletes a deck and its word links. Words that only belong to this deck and
  * have no review history are removed too; studied words are kept so the
- * learner never loses progress. Demo decks are tombstoned so a future seed
+ * learner never loses progress. Built-in decks are tombstoned so a future seed
  * upgrade won't re-add them.
  */
 export async function deleteDeck(
@@ -699,13 +682,20 @@ export async function deleteDeck(
       const orphaned = wordIds.filter((id) => !studied.has(id) && !stillLinked.has(id));
       if (orphaned.length > 0) {
         await database.words.bulkDelete(orphaned);
-        for (const wordId of orphaned) {
-          const state = await database.userWordStates.where('wordId').equals(wordId).first();
-          if (state) await database.userWordStates.delete(state.id);
+        // One indexed query for the whole batch: a per-word lookup would issue
+        // thousands of IndexedDB requests and freeze the delete of a real deck.
+        const orphanedStates = await database.userWordStates
+          .where('wordId')
+          .anyOf(orphaned)
+          .toArray();
+        if (orphanedStates.length > 0) {
+          await database.userWordStates.bulkDelete(orphanedStates.map((state) => state.id));
         }
       }
 
-      if (deck.isDemo) {
+      // Any deck that ships with the app is tombstoned, so the next seed upgrade
+      // does not silently bring back something the learner deleted on purpose.
+      if (deck.isDemo || isBundledDeck(deckId)) {
         const row = await database.meta.get('removedDemoDecks');
         const current = Array.isArray(row?.value) ? (row.value as string[]) : [];
         if (!current.includes(deckId)) {

@@ -288,13 +288,14 @@ test.describe('WordFlow core loop', () => {
     await expect(page.getByText(/下次复习/).first()).toBeVisible();
   });
 
-  test('decks page ships the full exam vocabulary plus demo decks', async ({ page }) => {
+  test('decks page ships the full exam vocabulary', async ({ page }) => {
     await page.goto('/decks');
     await expect(page.getByRole('heading', { name: '词书中心', exact: true })).toBeVisible();
 
-    // 9 hand-written sample decks + 8 full-size ECDICT exam decks.
+    // The built-in vocabulary is exactly the eight ECDICT exam decks. The old
+    // hand-written sample decks were removed, so the count is stable at 8.
     const cards = page.locator('article.card');
-    await expect(cards).toHaveCount(17);
+    await expect(cards).toHaveCount(8);
 
     // Real, full vocabulary sizes — this is the whole point of the ECDICT decks.
     for (const [name, count] of [
@@ -312,8 +313,8 @@ test.describe('WordFlow core loop', () => {
       await expect(card).toContainText(count);
     }
 
-    // Sample decks are still labelled as samples, never as official lists.
-    await expect(page.getByRole('heading', { name: 'CET-4 演示词书', exact: true })).toBeVisible();
+    // No sample deck may reappear, and nothing may be labelled as demo data.
+    await expect(page.getByRole('heading', { name: /演示词书/ })).toHaveCount(0);
     await expect(page.getByText(/词库版本/)).toBeVisible();
     // Source/licence must be visible for the generated decks.
     await expect(page.getByText(/ECDICT/).first()).toBeVisible();
@@ -359,24 +360,24 @@ test.describe('WordFlow core loop', () => {
     await page.goto('/study');
     await expect(page.getByRole('heading', { name: '选择词书' })).toBeVisible();
 
-    // Every deck shows its real word count in plain language ("共 31 词").
+    // Every deck shows its real word count in plain language ("共 3844 词").
     const picker = page.locator('section', { hasText: '选择词书' }).first();
-    await expect(picker.getByRole('button', { name: /CET-4 演示词书/ })).toContainText('共 31 词');
-    await expect(picker.getByRole('button', { name: /CET-6 演示词书/ })).toContainText('共 25 词');
-    await expect(picker.getByRole('button', { name: /雅思学术演示词书/ })).toContainText('共 20 词');
+    await expect(picker.getByRole('button', { name: /CET-4 四级词表/ })).toContainText('共 3844 词');
+    await expect(picker.getByRole('button', { name: /CET-6 六级词表/ })).toContainText('共 5401 词');
+    await expect(picker.getByRole('button', { name: /雅思词表/ })).toContainText('共 5020 词');
     // …and the learned/pending split, which is what "共 X 词" alone can't show.
-    await expect(picker.getByRole('button', { name: /CET-4 演示词书/ })).toContainText('已学 0');
-    await expect(picker.getByRole('button', { name: /CET-4 演示词书/ })).toContainText('待学 31');
+    await expect(picker.getByRole('button', { name: /CET-4 四级词表/ })).toContainText('已学 0');
+    await expect(picker.getByRole('button', { name: /CET-4 四级词表/ })).toContainText('待学 3844');
 
     // Search narrows the list.
     await page.getByLabel('搜索词书').fill('雅思');
-    await expect(picker.getByRole('button', { name: /雅思学术演示词书/ })).toBeVisible();
-    await expect(picker.getByRole('button', { name: /CET-4 演示词书/ })).toHaveCount(0);
+    await expect(picker.getByRole('button', { name: /雅思词表/ })).toBeVisible();
+    await expect(picker.getByRole('button', { name: /CET-4 四级词表/ })).toHaveCount(0);
     await page.getByLabel('搜索词书').fill('');
 
     // Selecting one deck updates the summary and the plan preview.
-    await picker.getByRole('button', { name: /雅思学术演示词书/ }).click();
-    await expect(page.getByTestId('deck-selection-summary')).toContainText('已选 1 本 · 20 词');
+    await picker.getByRole('button', { name: /雅思词表/ }).click();
+    await expect(page.getByTestId('deck-selection-summary')).toContainText('已选 1 本 · 5020 词');
     await expect(page.getByText(/本节计划/)).toBeVisible();
 
     // The scoped session only serves that deck's words.

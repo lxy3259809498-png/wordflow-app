@@ -46,8 +46,11 @@ test.describe('import and backup', () => {
     await dialog.getByRole('button', { name: '确认导入 2 词' }).click();
     await expect(page.getByText('导入完成')).toBeVisible();
 
-    // The new words are queryable once the deck word list is expanded.
+    // The imported words live at the end of a 3,800-word deck, so search for
+    // them instead of paging through the list.
     await page.getByRole('button', { name: '查看单词' }).first().click();
+    const deckSearch = page.getByLabel(/中搜索单词/).first();
+    await deckSearch.fill('zyzzyva');
     await expect(page.getByText('zyzzyva').first()).toBeVisible();
 
     // Undo the batch and verify the words disappear again.

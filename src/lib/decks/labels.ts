@@ -22,8 +22,8 @@ export function examLabel(type: ExamType): string {
   return EXAM_LABELS[type] ?? type;
 }
 
-/** Short, honest description shown next to each demo deck. */
-export const DEMO_DECK_NOTE =
-  '原创手写演示词条，用于体验学习流程；不是官方词表，也不代表考试范围。';
+/** Where the built-in decks come from. Never presented as an official syllabus. */
+export const BUILT_IN_DECK_NOTE =
+  '词表与中文释义来自 ECDICT（MIT 许可）的考试标签，按词频与标签整理，不是官方考纲全集。';
 
 export const VOCABULARY_RELEASE = '2026.10';

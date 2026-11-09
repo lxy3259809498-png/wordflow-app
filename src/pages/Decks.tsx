@@ -43,6 +43,8 @@ export default function Decks() {
   const [applying, setApplying] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [detailDeckId, setDetailDeckId] = useState<string | null>(null);
+  const [detailQuery, setDetailQuery] = useState('');
+  const [detailLimit, setDetailLimit] = useState(100);
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ExamType | 'all'>('all');
   const [sortKey, setSortKey] = useState<SortKey>('default');
@@ -201,7 +203,7 @@ export default function Decks() {
   const handleDeleteDeck = async (deckId: string, deckName: string) => {
     if (
       !window.confirm(
-        `删除「${deckName}」？未学习过的词条会被清理，已学过的词会保留记忆记录；演示词书不会被自动加回。`,
+        `删除「${deckName}」？未学习过的词条会被清理，已学过的词会保留记忆记录；内置词书删除后不会被种子迁移加回。`,
       )
     ) {
       return;
@@ -240,7 +242,15 @@ export default function Decks() {
         const ids = new Set(
           data.deckWords.filter((link) => link.deckId === detailDeckId).map((link) => link.wordId),
         );
-        return data.words.filter((word) => ids.has(word.id));
+        const q = detailQuery.trim().toLowerCase();
+        return data.words.filter((word) => {
+          if (!ids.has(word.id)) return false;
+          if (!q) return true;
+          return (
+            word.term.toLowerCase().includes(q) ||
+            word.definitions.some((definition) => definition.toLowerCase().includes(q))
+          );
+        });
       })()
     : [];
 
@@ -251,7 +261,7 @@ export default function Decks() {
     <div className="space-y-5">
       <PageHeader
         title="词书中心"
-        subtitle={`共 ${data.decks.length} 本词书 · ${totalWords} 个词条 · 演示词库版本 ${VOCABULARY_RELEASE}。分类目录覆盖 10 类，没有数据的分类会明确标注「尚未导入」。`}
+        subtitle={`共 ${data.decks.length} 本词书 · ${totalWords} 个词条 · 词库版本 ${VOCABULARY_RELEASE}。分类目录覆盖 10 类，没有数据的分类会明确标注「尚未导入」。`}
         actions={
           <div className="flex gap-2">
             <Link to="/pronunciation" className="btn-secondary">
@@ -266,9 +276,18 @@ export default function Decks() {
         }
       />
 
-      <InfoBanner tone="warn" title="关于词库来源">
-        WordFlow 只内置原创手写演示词条，<strong>不包含也不声称拥有</strong>任何官方 CET-4 / CET-6 / 考研 / 雅思 / 托福 / GRE
-        商业词库。需要完整词库时请导入你有权使用的词表（见下方模板与说明）。
+      <InfoBanner tone="info" title="关于词库来源">
+        内置的 8 本考试词书来自{' '}
+        <a
+          className="link"
+          href="https://github.com/skywind3000/ECDICT"
+          target="_blank"
+          rel="noreferrer"
+        >
+          ECDICT
+        </a>
+        （MIT 许可），按考试标签整理，<strong>不是官方考纲全集</strong>。需要别的词表时请导入你有权使用的 CSV / JSON
+        文件（见下方格式说明）。
       </InfoBanner>
 
       <div className="card card-pad space-y-3">
@@ -380,7 +399,11 @@ export default function Decks() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="truncate text-base font-semibold">{deck.name}</h2>
                       <span className="chip text-[10px]">{examLabel(deck.examType)}</span>
-                      {deck.isDemo ? <span className="chip text-[10px]">演示</span> : null}
+                      {deck.isDemo ? null : (
+                        <span className="chip text-[10px] text-muted">
+                          {deck.source?.startsWith('ECDICT') ? 'ECDICT' : '已导入'}
+                        </span>
+                      )}
                     </div>
                     <p className="mt-1 line-clamp-2 text-xs text-muted">{deck.description}</p>
                   </div>
@@ -461,7 +484,12 @@ export default function Decks() {
                   <button
                     type="button"
                     className="btn-ghost !py-1.5 !text-xs"
-                    onClick={() => setDetailDeckId(detailDeckId === deck.id ? null : deck.id)}
+                    onClick={() => {
+                      const next = detailDeckId === deck.id ? null : deck.id;
+                      setDetailDeckId(next);
+                      setDetailQuery('');
+                      setDetailLimit(100);
+                    }}
                   >
                     {detailDeckId === deck.id ? '收起' : '查看单词'}
                   </button>
@@ -477,35 +505,60 @@ export default function Decks() {
                 </div>
 
                 {detailDeckId === deck.id ? (
-                  <ul className="max-h-72 divide-y divide-line/70 overflow-auto rounded-lg border border-line/70">
-                    {detailWords.length === 0 ? (
-                      <li className="px-3 py-2 text-xs text-muted">该词书还没有单词。</li>
-                    ) : (
-                      detailWords.slice(0, 100).map((word) => (
-                        <li key={word.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                          <span className="flex min-w-0 items-center gap-2">
-                            <span className="font-medium">{word.term}</span>
-                            <span className="font-mono text-[10px] text-muted">
-                              {word.phoneticUS || word.phonetic || '无音标'}
-                            </span>
-                          </span>
-                          <span className="flex items-center gap-1.5">
-                            <span className="truncate text-xs text-muted">{word.definitions[0]}</span>
-                            {word.audioUS || word.audioUK ? (
-                              <span className="chip text-[9px] text-ok">录音</span>
-                            ) : (
-                              <span className="chip text-[9px]">TTS</span>
-                            )}
-                          </span>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="input !py-1.5 !text-xs"
+                        placeholder="在这本词书里找单词…"
+                        aria-label={`在 ${deck.name} 中搜索单词`}
+                        value={detailQuery}
+                        onChange={(event) => setDetailQuery(event.target.value)}
+                      />
+                      <span className="shrink-0 text-[11px] text-muted">
+                        {detailWords.length} 个匹配
+                      </span>
+                    </div>
+                    <ul className="max-h-72 divide-y divide-line/70 overflow-auto rounded-lg border border-line/70">
+                      {detailWords.length === 0 ? (
+                        <li className="px-3 py-2 text-xs text-muted">
+                          {detailQuery.trim() ? '没有匹配的单词。' : '该词书还没有单词。'}
                         </li>
-                      ))
-                    )}
-                    {detailWords.length > 100 ? (
-                      <li className="px-3 py-2 text-[11px] text-muted">
-                        仅显示前 100 个，共 {detailWords.length} 个。
-                      </li>
+                      ) : (
+                        detailWords.slice(0, detailLimit).map((word) => (
+                          <li key={word.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="font-medium">{word.term}</span>
+                              <span className="font-mono text-[10px] text-muted">
+                                {word.phoneticUS || word.phonetic || '无音标'}
+                              </span>
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="truncate text-xs text-muted">{word.definitions[0]}</span>
+                              {word.audioUS || word.audioUK ? (
+                                <span className="chip text-[9px] text-ok">录音</span>
+                              ) : (
+                                <span className="chip text-[9px]">TTS</span>
+                              )}
+                            </span>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                    {detailWords.length > detailLimit ? (
+                      <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
+                        <span>
+                          已显示 {detailLimit} / {detailWords.length} 个
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-ghost !py-1 !text-xs"
+                          onClick={() => setDetailLimit((limit) => limit + 200)}
+                        >
+                          显示更多
+                        </button>
+                      </div>
                     ) : null}
-                  </ul>
+                  </div>
                 ) : null}
               </article>
             );

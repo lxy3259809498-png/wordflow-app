@@ -510,7 +510,7 @@ export function StudySetup({ onStart, starting }: StudySetupProps) {
 
       {preview?.reason === 'no-words' ? (
         <InfoBanner tone="warn" title="当前词书没有单词">
-          先到 <Link className="link" to="/decks">词书</Link> 页导入词表，或选择内置演示词书。
+          先到 <Link className="link" to="/decks">词书</Link> 页导入词表，或新建一本自己的词书。
         </InfoBanner>
       ) : null}
 

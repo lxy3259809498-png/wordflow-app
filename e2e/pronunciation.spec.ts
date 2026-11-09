@@ -181,11 +181,11 @@ test.describe('pronunciation', () => {
 });
 
 test.describe('deck centre', () => {
-  test('lists every demo deck with real counts and quality fields', async ({ page }) => {
+  test('lists every built-in deck with real counts and quality fields', async ({ page }) => {
     await page.goto('/decks');
     await expect(page.getByRole('heading', { name: '词书中心' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'CET-4 演示词书' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: '科技与 AI 热词演示词书' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'CET-4 四级词表' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'GRE 词表' })).toBeVisible();
     // Quality counters are rendered for the first deck.
     await expect(page.getByText(/缺录音 \d+/).first()).toBeVisible();
     await expect(page.getByText(/缺音标 \d+/).first()).toBeVisible();
@@ -196,13 +196,13 @@ test.describe('deck centre', () => {
     await page.goto('/decks');
     const search = page.getByLabel('搜索词书');
     await search.fill('雅思');
-    await expect(page.getByRole('heading', { name: '雅思学术演示词书' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'CET-4 演示词书' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '雅思词表' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'CET-4 四级词表' })).toHaveCount(0);
 
     await search.fill('');
     await page.getByLabel('按分类筛选').selectOption('CET6');
-    await expect(page.getByRole('heading', { name: 'CET-6 演示词书' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'CET-4 演示词书' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'CET-6 六级词表' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'CET-4 四级词表' })).toHaveCount(0);
   });
 
   test('categories without data say 尚未导入 instead of inventing counts', async ({ page }) => {
