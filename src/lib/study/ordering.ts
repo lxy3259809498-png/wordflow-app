@@ -1,4 +1,3 @@
-import type { Word } from '@/lib/types';
 
 /**
  * Card ordering for study sessions.
@@ -52,30 +51,37 @@ export function hashSeed(value: string): number {
   return hash >>> 0;
 }
 
+/** The minimum fields ordering needs; full Word rows also satisfy this. */
+export interface OrderableWord {
+  id: string;
+  term: string;
+  tags?: string[];
+}
+
 /**
  * Apply an ordering to words. `seed` makes `random` reproducible; pass a stable
  * value (e.g. the session id) so resuming keeps the same sequence.
  */
-export function orderWords(
-  words: Word[],
+export function orderWords<T extends OrderableWord>(
+  words: T[],
   order: WordOrder,
   seed = 'wordflow',
   context: OrderContext = {},
-): Word[] {
+): T[] {
+  const tagsOf = (word: T) => word.tags ?? [];
   switch (order) {
     case 'alphabetical':
       return [...words].sort((a, b) => collator.compare(a.term, b.term));
     case 'random':
       return seededShuffle(words, hashSeed(seed));
     case 'frequency': {
-      const score = (word: Word) =>
-        (word.tags.includes('高频') ? 0 : 1) + (word.tags.length > 1 ? 0 : 0.5);
+      const score = (word: T) => (tagsOf(word).includes('高频') ? 0 : 1) + (tagsOf(word).length > 1 ? 0 : 0.5);
       return [...words].sort(
         (a, b) => score(a) - score(b) || collator.compare(a.term, b.term),
       );
     }
     case 'mistakes': {
-      const weight = (word: Word) =>
+      const weight = (word: T) =>
         (context.lapseByWord?.get(word.id) ?? 0) * 2 +
         (context.fuzzyByWord?.get(word.id) ?? 0);
       return [...words].sort(

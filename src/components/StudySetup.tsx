@@ -55,14 +55,31 @@ export interface StudySetupProps {
 
 export function StudySetup({ onStart, starting }: StudySetupProps) {
   const { settings, updateSettings } = useApp();
+  /**
+   * Deck metadata + per-deck counts only.
+   *
+   * This used to read `db.words.toArray()` — all ~14.9k full records (definitions,
+   * phonetics, examples…), roughly 5.6 MB — into React state. Every re-render
+   * then had to reconcile that object graph, which is why picking a deck took
+   * 5–12 s. The picker only needs ids and counts, so nothing here loads word rows.
+   */
   const snapshot = useLiveQuery(async () => {
-    const [decks, deckWords, words, states] = await Promise.all([
+    const [decks, deckWordRows, states] = await Promise.all([
       db.decks.toArray(),
       db.deckWords.toArray(),
-      db.words.toArray(),
       db.userWordStates.toArray(),
     ]);
-    return { decks, deckWords, words, states };
+    const studied = new Set(
+      states.filter((state) => state.lastReviewedAt !== null).map((state) => state.wordId),
+    );
+    const byDeck = new Map<string, { total: number; learned: number }>();
+    for (const link of deckWordRows) {
+      const entry = byDeck.get(link.deckId) ?? { total: 0, learned: 0 };
+      entry.total += 1;
+      if (studied.has(link.wordId)) entry.learned += 1;
+      byDeck.set(link.deckId, entry);
+    }
+    return { decks, byDeck, totalWords: deckWordRows.length };
   }, []);
 
   const [reviewMode, setReviewMode] = useState<ReviewMode>(settings.reviewMode);
@@ -76,23 +93,8 @@ export function StudySetup({ onStart, starting }: StudySetupProps) {
 
   const deckOptions = useMemo(() => snapshot?.decks ?? [], [snapshot]);
 
-  /** Per-deck learned/total, so the picker shows real progress, not a guess. */
-  const deckStats = useMemo(() => {
-    const map = new Map<string, { total: number; learned: number }>();
-    if (!snapshot) return map;
-    const studied = new Set(
-      snapshot.states.filter((s) => s.lastReviewedAt !== null).map((s) => s.wordId),
-    );
-    for (const deck of snapshot.decks) {
-      const ids = new Set(
-        snapshot.deckWords.filter((link) => link.deckId === deck.id).map((link) => link.wordId),
-      );
-      let learned = 0;
-      for (const id of ids) if (studied.has(id)) learned += 1;
-      map.set(deck.id, { total: ids.size, learned });
-    }
-    return map;
-  }, [snapshot]);
+  /** Per-deck learned/total, already aggregated in SQL-ish fashion above. */
+  const deckStats = useMemo(() => snapshot?.byDeck ?? new Map(), [snapshot]);
 
   const filteredDecks = useMemo(() => {
     const q = deckQuery.trim().toLowerCase();
@@ -161,16 +163,13 @@ export function StudySetup({ onStart, starting }: StudySetupProps) {
   if (!snapshot) return <Spinner label="正在读取词书…" />;
 
   const activeDeckIds = deckIds.filter((id) => id !== NO_DECK_SENTINEL);
+  // Sum of per-deck counts already computed in the snapshot — no word scan here.
   const totalWords =
     activeDeckIds.length === 0
       ? deckIds.length === 0
-        ? snapshot.words.length
+        ? snapshot.totalWords
         : 0
-      : snapshot.words.filter((word) =>
-          snapshot.deckWords.some(
-            (link) => link.wordId === word.id && activeDeckIds.includes(link.deckId),
-          ),
-        ).length;
+      : activeDeckIds.reduce((sum, id) => sum + (deckStats.get(id)?.total ?? 0), 0);
 
   const canStart =
     Boolean(preview && preview.plannedNew + preview.plannedReview > 0) && !starting;
