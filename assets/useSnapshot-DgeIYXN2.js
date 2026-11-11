@@ -1,0 +1,1 @@
+import{u as i,d as s}from"./index-D_uCFHmQ.js";function u(){return i(async()=>{const[r,o,t,a,e,d,y]=await Promise.all([s.decks.toArray(),s.words.toArray(),s.deckWords.toArray(),s.userWordStates.toArray(),s.reviewLogs.toArray(),s.sessions.toArray(),s.dailyStats.toArray()]);return{decks:r,words:o,deckWords:t,states:a,logs:e,sessions:d,stats:y}},[])}export{u};
